@@ -35,66 +35,74 @@ void inf_loop() {
     struct timeval *out;
     struct ip *ip;
  
-    int seq_sum = 1;
+  int seq_num = 1;
+while (1) {
+    // Étape 1 : Créez et envoyez un paquet ICMP Echo Request
+    struct icmp_packet icmp_send;
+    memset(&icmp_send, 0, sizeof(icmp_send));
+    icmp_send.header.icmp_type = ICMP_ECHO;
+    icmp_send.header.icmp_code = 0;
+    icmp_send.header.icmp_id = htons(getpid());
+    icmp_send.header.icmp_seq = htons(seq_num++);
 
-    while (1) {
-       
+    // Remplissez les données ICMP
+    gettimeofday((struct timeval *)icmp_send.data, NULL);
+    icmp_send.header.icmp_cksum = 0;
+    icmp_send.header.icmp_cksum = in_cksum((unsigned short *)&icmp_send, sizeof(icmp_send));
 
-      
+    // Envoyez le paquet ICMP Echo Request
+    size_t icmp_send_size = sizeof(icmp_send);
+    if (sendto(sockfd, &icmp_send, icmp_send_size, 0, res->ai_addr, res->ai_addrlen) < 0) {
+        perror("sendto");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
 
-       memset(&iov, 0, sizeof(iov));
-       memset(&msg, 0, sizeof(msg));
-       memset(&icmp, 0, sizeof(icmp));
-      // memset(icmp_data, 0, ICMP_DATA_SIZE);
+    // Étape 2 : Réception du paquet ICMP Echo Reply
+    struct msghdr msg;
+    struct iovec iov;
+    unsigned char recvbuf[84];
+    struct sockaddr_in recv_addr;
 
-        icmp.icmp_type = ICMP_ECHO;
-        icmp.icmp_code = 0;
-        icmp.icmp_id = getpid();
-        icmp.icmp_seq = seq_sum++;
-        gettimeofday((struct timeval *)icmp.icmp_data, NULL);
-        icmp.icmp_cksum = 0;
-        icmp.icmp_cksum = checksum((unsigned short *)&icmp, sizeof(icmp));
+    memset(&msg, 0, sizeof(msg));
+    memset(&recv_addr, 0, sizeof(recv_addr));
+    memset(&iov, 0, sizeof(iov));
+    memset(recvbuf, 0, sizeof(recvbuf));
 
+    iov.iov_base = recvbuf;
+    iov.iov_len = sizeof(recvbuf);
+    msg.msg_name = &recv_addr;
+    msg.msg_namelen = sizeof(recv_addr);
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
 
-        iov.iov_base = buf;
-        iov.iov_len = sizeof(buf);
+    // Étape 3 : Attendre et vérifier le paquet ICMP Echo Reply
+    struct timeval timeout;
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
-        msg.msg_name = NULL;
-        msg.msg_namelen = 0;
-        msg.msg_iov = &iov;
-        msg.msg_iovlen = 1;
-        msg.msg_control = NULL;
-        msg.msg_controllen = 0;
-        msg.msg_flags = 0;
-
-        if (sendto(g_env.sockfd, &icmp, sizeof(icmp), 0, (struct sockaddr *)g_env.res, sizeof(struct sockaddr)) < 0) {
-            perror("sendto");
-            close(g_env.sockfd);
-            exit(EXIT_FAILURE);
+    ssize_t recvmsg_size = recvmsg(sockfd, &msg, 0);
+    if (recvmsg_size < 0) {
+        if (errno == EAGAIN) {
+            printf("Request timeout for icmp_seq %d\n", seq_num - 1);
+        } else {
+            perror("recvmsg");
         }
- 
+        continue;
+    }
 
+    // Traitez le paquet ICMP Echo Reply
+    struct ip *ip_header = (struct ip *)recvbuf;
+    int ip_header_len = ip_header->ip_hl << 2;
+    struct icmp *icmp_recv = (struct icmp *)(recvbuf + ip_header_len);
 
-        int nbytes = recvmsg(g_env.sockfd, &msg, 0);
-
-        if (nbytes < 0) {
-            if (errno == EAGAIN) {
-                printf("Request timeout for icmp_seq \n");
-            } else {
-                perror("recvfrom");
-            }
-            continue;
-        }
-
-        ip = (struct ip *)buf;
-        icmp_rec = (struct icmp *)(buf + (ip->ip_hl << 2));
-        gettimeofday(&in, NULL);
-        out = (struct timeval *)(icmp_rec->icmp_data);
-
-        double latency = (in.tv_sec - out->tv_sec) * 1000 + (in.tv_usec - out->tv_usec) / 1000;
-        //printf("Received ICMP packet from %s: icmp_seq=%d  time=%f ms\n", g_env.ipstr, icmp.icmp_seq,  latency);
-        printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%f ms\n", nbytes  , g_env.ipstr, icmp.icmp_seq, ip->ip_ttl, latency);
-       usleep(1000000);
+    if (icmp_recv->icmp_type == ICMP_ECHOREPLY) {
+        struct timeval cur_time;
+        gettimeofday(&cur_time, NULL);
+        struct timeval *recv_time = (struct timeval *)icmp_recv->icmp_data;
+        double rtt = (cur_time.tv_sec - recv_time->tv_sec) * 1000.0 + (cur_time.tv_usec - recv_time->tv_usec) / 1000.0;
+        printf("%zd bytes from %s: icmp_seq=%d ttl=%d time=%.1f ms\n", recvmsg_size, ipstr
     }
     return ;
 }

@@ -16,6 +16,11 @@
 
 # define ICMP_DATA_SIZE 56
 
+typedef struct s_icmp_packet {
+    struct icmp icmp;
+    char data[56];
+}       icmp_packet;
+
 typedef struct s_env {
 
     int sockfd;
