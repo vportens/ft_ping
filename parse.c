@@ -2,6 +2,7 @@
 
 extern t_env g_env;
 
+
 int pars_hostname(char *target) {
     struct addrinfo hints;
     struct addrinfo *res;
@@ -10,7 +11,8 @@ int pars_hostname(char *target) {
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;  // IPv4 or IPv6
-    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_socktype = 0;
+    hints.ai_protocol = IPPROTO_ICMP;
 
     if ((status = getaddrinfo(target, NULL, &hints, &res)) != 0) {
         fprintf(stderr,"getaddrinfo: %s\n", gai_strerror(status));
@@ -19,12 +21,14 @@ int pars_hostname(char *target) {
 
     printf("address ip : %s\n", target);
 
-    void *addr;
+    struct in_addr addr;
     char *ipver;
 
     if (res->ai_family == AF_INET) { // IPv4
-        g_env.res = (struct sockaddr_in *)res->ai_addr;
-        addr = &((g_env.res)->sin_addr);
+        g_env.res = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
+        memcpy(g_env.res, res->ai_addr, sizeof(struct sockaddr_in));
+        //g_env.res = (struct sockaddr_in *)res->ai_addr;
+        addr = ((g_env.res)->sin_addr);
         ipver = "IPv4";
     } else { // IPv6
         fprintf(stderr, "Error IPv6 not supported\n");
@@ -32,7 +36,7 @@ int pars_hostname(char *target) {
         return (EXIT_FAILURE);
    }
 
-    if (inet_ntop(res->ai_family, addr, g_env.ipstr, sizeof g_env.ipstr) == NULL) {
+    if (inet_ntop(res->ai_family, &(addr.s_addr), g_env.ipstr, sizeof g_env.ipstr) == NULL) {
         perror("inet_ntop");
         freeaddrinfo(res);
         return (EXIT_FAILURE);
