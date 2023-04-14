@@ -58,6 +58,7 @@ void sendpacket() {
     memset(&(sock_in.sin_zero), 0, sizeof(sock_in.sin_zero));
 
     rawpacket = newpacket(&rawpacket_size);
+    //ft_memset(&sock_in, 0, sizeof(sock_in));
     if (sendto(g_env.sockfd, rawpacket, rawpacket_size, 0, (struct sockaddr *)&sock_in, sizeof(sock_in)) < 0) {
         perror("sendto");
         close(g_env.sockfd);
@@ -79,17 +80,18 @@ void	*ft_memset(void *b, int c, size_t len)
 
 
 void setbasemsghdr(struct msghdr *msg) {
-    struct iovec iov;
+    struct iovec *iov;
     char recvbuf[100];
 
+    iov = malloc(sizeof(struct iovec));
     ft_memset(msg, 0, sizeof(msg));
-    ft_memset(&iov, 0, sizeof(iov));
+    ft_memset(iov, 0, sizeof(*iov));
 
-    iov.iov_base = recvbuf;
-    iov.iov_len = sizeof(recvbuf);
+    iov->iov_base = recvbuf;
+    iov->iov_len = sizeof(recvbuf);
     msg->msg_name = NULL;
     msg->msg_namelen = 0;
-    msg->msg_iov = &iov;
+    msg->msg_iov = iov;
     msg->msg_iovlen = 1;
     msg->msg_control = NULL;
     msg->msg_controllen = 0;
@@ -99,14 +101,15 @@ void setbasemsghdr(struct msghdr *msg) {
 void readpacket() {
 
     char *ptr;
-    struct ip *ip;
-    struct icmp *icmp;
+    struct ip *ip = NULL;
+    struct icmp *icmp = NULL;
     struct msghdr msg;
     struct timeval tv_in;
     struct timeval *tv_out;
     double diff_tv;
     int bytes_c;
 
+    diff_tv = 0;
     setbasemsghdr(&msg);
     if ((bytes_c = recvmsg(g_env.sockfd, &msg, 0)) > 0) {
         ptr = (char *)msg.msg_iov->iov_base;
@@ -117,11 +120,15 @@ void readpacket() {
         //printf("tv_in.tv_sec: %ld, tv_in.tv_usec: %ld\n", tv_in.tv_sec, tv_in.tv_usec);
         //printf("tv_out->tv_sec: %ld, tv_out->tv_usec: %ld\n", tv_out->tv_sec, tv_out->tv_usec);
         diff_tv = (tv_in.tv_sec - tv_out->tv_sec) * 1000.0 + (tv_in.tv_usec - tv_out->tv_usec) / 1000.0;
-        printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl, diff_tv);
+        //printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl, diff_tv);
+      //  printf("%d bytes from : time=%.3f ms\n", bytes_c, diff_tv);
+      if (diff_tv > 1000)
+        printf("time=%.3f ms\n", diff_tv);
     }
     else {
         perror("recvmsg");
     }
+    free(msg.msg_iov);
 
 }
 

@@ -1,0 +1,8 @@
+address ip : www.google.com
+  IPv4: 142.250.179.100
+end pars_arg
+64 bytes from 142.250.179.100: icmp_seq=0 ttl=63 time=12.757 ms
+64 bytes from 142.250.179.100: icmp_seq=1 ttl=63 time=1.930 ms
+64 bytes from 142.250.179.100: icmp_seq=2 ttl=63 time=1.933 ms
+64 bytes from 142.250.179.100: icmp_seq=3 ttl=63 time=1.823 ms
+64 bytes from 142.250.179.100: icmp_seq=4 ttl=63 time=2.113 ms
