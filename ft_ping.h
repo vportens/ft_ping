@@ -16,10 +16,6 @@
 
 # define ICMP_DATA_SIZE 56
 
-typedef struct s_icmp_packet {
-    struct icmp header;
-    char data[56];
-}       t_icmp_packet;
 
 typedef struct s_env {
 
@@ -40,10 +36,6 @@ typedef struct s_env {
 
     struct timeval start_time;
 
-    union {
-        char buf[CMSG_SPACE(sizeof(int))];
-        struct cmsghdr align;
-    }   ctrl;
 }               t_env;
 
 int pars_arg(int ac, char **av);

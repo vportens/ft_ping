@@ -40,7 +40,7 @@ char *newpacket(size_t *size) {
 
     payload_s = sizeof(struct timeval);
     *size = sizeof(struct icmp) + payload_s;
-    rawpacket = (char *)malloc((*size));
+    rawpacket = malloc(sizeof(char) * (*size));
     memset(rawpacket, 0, *size);
     gettimeofday(&tv, NULL);
     memcpy(rawpacket + sizeof(struct icmp), &tv, sizeof(struct timeval)); // 
@@ -134,12 +134,12 @@ int set_sock() {
     setsockopt(g_env.sockfd, SOL_SOCKET, SO_REUSEADDR, &(g_env.op_reuseaddr), sizeof(g_env.op_reuseaddr));
     setsockopt(g_env.sockfd, IPPROTO_IP, IP_TTL, &(g_env.op_ttl), sizeof(g_env.op_ttl));
     gettimeofday(&(g_env.start_time), NULL);
-    g_env.seq_num = 1;
-    int i =0;
-    sendpacket();
+    g_env.seq_num = 0;
+    int i = 0;
     while (1) {
-        readpacket();
         sendpacket();
+        readpacket();
+        usleep(1000000);
         i++;
         if (i == 5)
             break;
