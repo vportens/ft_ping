@@ -127,7 +127,7 @@ void readpacket()
     struct timeval tv_in;
     struct timeval *tv_out;
     double diff_tv;
-    int bytes_c;
+    long unsigned int bytes_c;
 
     diff_tv = 0;
     setbasemsghdr(&msg);
@@ -137,8 +137,6 @@ void readpacket()
         ip = (struct ip *)ptr;
         icmp = (struct icmp *)(ptr + (ip->ip_hl * 4));
         gettimeofday(&tv_in, NULL);
-        if (icmp != NULL && (char *)(icmp + 1) != NULL)
-        {
             tv_out = (struct timeval *)(icmp + 1);
             if (tv_out && tv_out->tv_sec && tv_out->tv_usec)
             {
@@ -146,9 +144,12 @@ void readpacket()
                // printf("tv_out->tv_sec: %ld, tv_out->tv_usec: %ld\n", tv_out->tv_sec, tv_out->tv_usec);
 
                 diff_tv = (tv_in.tv_sec - tv_out->tv_sec) * 1000.0 + (tv_in.tv_usec - tv_out->tv_usec) / 1000.0;
-                printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl, diff_tv);
+                if (tv_out != NULL && tv_out->tv_sec != 0 && tv_out->tv_usec != 0)
+                {
+                    printf("%ld bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl, diff_tv);
+                   // printf("%d bytes from %s: icmp_seq=%d ttl=%d time= ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl);
+                }
             }
-        }
         //  printf("%d bytes from : time=%.3f ms\n", bytes_c, diff_tv);
     }
     else
@@ -171,6 +172,7 @@ int set_sock()
     gettimeofday(&(g_env.start_time), NULL);
     g_env.seq_num = 0;
     int i = 0;
+    signal(SIGINT, sigint_handler);
     while (1)
     {
         sendpacket();
