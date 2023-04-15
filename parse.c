@@ -15,8 +15,10 @@ int pars_hostname(char *target) {
     hints.ai_protocol = IPPROTO_ICMP;
 
     if ((status = getaddrinfo(target, NULL, &hints, &res)) != 0) {
-        fprintf(stderr,"getaddrinfo: %s\n", gai_strerror(status));
-        return (EXIT_FAILURE);
+        //freeaddrinfo(res);
+        freeaddrinfo(res);
+        fprintf(stderr,"ft_ping: unknown host\n" );
+        exit (EXIT_FAILURE);
     }
 
     printf("address ip : %s\n", target);

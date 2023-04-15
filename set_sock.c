@@ -53,37 +53,44 @@ char *newpacket(size_t *size)
     return (rawpacket);
 }
 
-void setIcmpVoid(struct icmp *icmp)
+void fill_stats(double diff_tv)
 {
-
-    icmp->icmp_type = 0;
-    icmp->icmp_code = 0;
-    icmp->icmp_cksum = 0;
-    icmp->icmp_id = 0;
-    icmp->icmp_seq = 0;
-    icmp->icmp_cksum = 0;
+  //  g_env.op_ttl++;
+    g_env.sum += diff_tv;
+    if (diff_tv < g_env.min)
+        g_env.min = diff_tv;
+    if (diff_tv > g_env.max)
+        g_env.max = diff_tv;
 }
 
 void sendpacket()
 {
+    printf("sendpacket\n");
     char *rawpacket;
     size_t rawpacket_size;
     struct sockaddr_in sock_in;
 
+    printf("sendpacket\n");
     memset(&sock_in, 0, sizeof(sock_in));
+    printf("sendpacket\n");
     sock_in.sin_family = AF_INET;
+    printf("sendpacket bp\n");
     sock_in.sin_addr.s_addr = g_env.res->sin_addr.s_addr;
+    printf("sendpacket\n");
     sock_in.sin_port = 0;
+    printf("sendpacket\n");
     memset(&(sock_in.sin_zero), 0, sizeof(sock_in.sin_zero));
 
+    printf("testbpacke\n");
     rawpacket = newpacket(&rawpacket_size);
+    printf("goto sendto\n");
     if (sendto(g_env.sockfd, rawpacket, rawpacket_size, 0, (struct sockaddr *)&sock_in, sizeof(sock_in)) < 0)
     {
-        perror("sendto");
-        close(g_env.sockfd);
-        exit(EXIT_FAILURE);
+        perror("sendto error");
+        //close(g_env.sockfd);
+        //exit(EXIT_FAILURE);
     }
-
+    printf("sendto\n");
     free(rawpacket);
 }
 
@@ -119,6 +126,7 @@ void setbasemsghdr(struct msghdr *msg)
 
 void readpacket()
 {
+    printf("readpacket\n");
 
     char *ptr;
     struct ip *ip = NULL;
@@ -127,15 +135,21 @@ void readpacket()
     struct timeval tv_in;
     struct timeval *tv_out;
     double diff_tv;
-    long unsigned int bytes_c;
+    int bytes_c;
 
     diff_tv = 0;
     setbasemsghdr(&msg);
-    if ((bytes_c = recvmsg(g_env.sockfd, &msg, 0)) > 0)
+    if ((bytes_c = recvmsg(g_env.sockfd, &msg, 0)) == 64)
     {
+        printf("bytes_c: %d\n", bytes_c);
         ptr = (char *)msg.msg_iov->iov_base;
         ip = (struct ip *)ptr;
         icmp = (struct icmp *)(ptr + (ip->ip_hl * 4));
+        if (icmp->icmp_type != ICMP_ECHOREPLY) {
+            printf("test\n");
+            free(msg.msg_iov);
+            return ;
+        }
         gettimeofday(&tv_in, NULL);
             tv_out = (struct timeval *)(icmp + 1);
             if (tv_out && tv_out->tv_sec && tv_out->tv_usec)
@@ -146,15 +160,26 @@ void readpacket()
                 diff_tv = (tv_in.tv_sec - tv_out->tv_sec) * 1000.0 + (tv_in.tv_usec - tv_out->tv_usec) / 1000.0;
                 if (tv_out != NULL && tv_out->tv_sec != 0 && tv_out->tv_usec != 0)
                 {
-                    printf("%ld bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl, diff_tv);
+                    printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl, diff_tv);
+                    fill_stats(diff_tv);
                    // printf("%d bytes from %s: icmp_seq=%d ttl=%d time= ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl);
                 }
             }
         //  printf("%d bytes from : time=%.3f ms\n", bytes_c, diff_tv);
     }
+    else if (bytes_c < 0)
+    {
+        printf("test1\n");
+        perror("recvmsg");
+    }
+    else if (bytes_c == 0)
+    {
+        dprintf(2, "ft_ping: socket closed\n");
+        //exit clean;
+    }
     else
     {
-        perror("recvmsg");
+        printf("bytes_c: %d\n", bytes_c);
     }
     free(msg.msg_iov);
 }

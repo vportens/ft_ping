@@ -34,6 +34,7 @@ typedef struct s_env {
     double min;
     double max;
     double sum;
+    double *lst_stat;
 
     struct timeval start_time;
     struct timeval end_time;
