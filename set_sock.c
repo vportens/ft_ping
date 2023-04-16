@@ -70,18 +70,12 @@ void sendpacket()
     size_t rawpacket_size;
     struct sockaddr_in sock_in;
 
-    printf("sendpacket\n");
     memset(&sock_in, 0, sizeof(sock_in));
-    printf("sendpacket\n");
     sock_in.sin_family = AF_INET;
-    printf("sendpacket bp\n");
     sock_in.sin_addr.s_addr = g_env.res->sin_addr.s_addr;
-    printf("sendpacket\n");
     sock_in.sin_port = 0;
-    printf("sendpacket\n");
     memset(&(sock_in.sin_zero), 0, sizeof(sock_in.sin_zero));
 
-    printf("testbpacke\n");
     rawpacket = newpacket(&rawpacket_size);
     printf("goto sendto\n");
     if (sendto(g_env.sockfd, rawpacket, rawpacket_size, 0, (struct sockaddr *)&sock_in, sizeof(sock_in)) < 0)
@@ -125,8 +119,8 @@ void setbasemsghdr(struct msghdr *msg)
     msg->msg_flags = 0;
 }
 
-void fill_rep_msg(struct s_reply *rep, int bytes_c, struct msghdr msg) {
-    struct ip *ip;
+/*void fill_rep_msg(struct s_reply *rep, int bytes_c, struct msghdr msg) {
+    struct ip *ip  ;
     char *ptr;
     ssize_t ip_icmp_offset;
 
@@ -139,7 +133,7 @@ void fill_rep_msg(struct s_reply *rep, int bytes_c, struct msghdr msg) {
     rep->bytes_c = bytes_c;
     rep->msg_rep = msg;
     ptr = (char *)msg.msg_iov->iov_base;
-    ip = (struct ip *)ptr;
+    ip = (struct ip *)(char *)ptr;
     printf("test ip_p: %d\n", ip->ip_p);
     if (ip->ip_p != IPPROTO_ICMP){ //  || 
         printf("ip_p: %d\nIPPROT_ICMP: %d\n", ip->ip_p, IPPROTO_ICMP);
@@ -148,16 +142,24 @@ void fill_rep_msg(struct s_reply *rep, int bytes_c, struct msghdr msg) {
         exit(2);
         // clean exit
     }
-    ip_icmp_offset = ip->ip_hl << 2;
+    uint16_t ip_p_temp = ip->ip_p;
+    uint16_t ip_hl_temp = ip->ip_hl;
+
+    rep->icmp = (struct icmp *)(ptr + (ip_hl_temp << 2));
+    printf("Icmp rep type: %d\n", rep->icmp->icmp_type);
+    ip_icmp_offset = ip_hl_temp << 2;
+   
     if ((size_t)(bytes_c) < ip_icmp_offset + sizeof(struct icmp)) {
         printf("ip_p: %d\nIPPROT_ICMP: %d\n", ip->ip_p, IPPROTO_ICMP);
         dprintf(2, "ft_ping: IP header from echo reply truncated\n");
         printf("error3\n");
         exit(2);
     }
-    rep->icmp_rep = (struct icmp *)(ptr + ip_icmp_offset);
 
-}
+    //rep->icmp = (struct icmp *)(ptr + ip_icmp_offset);
+    printf("Icmp rep type: %d\n", rep->icmp->icmp_type);
+
+}*/
 
 void readpacket()
 {
@@ -175,25 +177,55 @@ void readpacket()
     struct s_reply rep;
 
     diff_tv = 0;
+    printf("readpacket1\n");
     setbasemsghdr(&msg);
+    printf("readpacket2\n");
     bytes_c = recvmsg(g_env.sockfd, &msg, 0);
+    printf("bytes_c: %d\n", bytes_c);
     if (bytes_c > 0)
     {
-        fill_rep_msg(&rep, bytes_c, msg);
+        if (bytes_c < (int)sizeof(struct ip)) {
+            printf("error1\n");
+            dprintf(2, "ft_ping: IP header from echo reply truncated\n");
+            exit(2);
+            // clean exit
+        }
+
+
         rep.bytes_c = bytes_c;
         printf("bytes_c: %d\n", bytes_c);
-        //ptr = (char *)msg.msg_iov->iov_base;
-        //ip = (struct ip *)ptr;
-        //printf("Ip_p: %d\n", ip->ip_p);
-        //icmp = (struct icmp *)(ptr + (ip->ip_hl * 4));
-        /*
-        if (rep.icmp_rep->icmp_type != ICMP_ECHOREPLY) {
-            printf("test\n");
+        ptr = (char *)msg.msg_iov->iov_base;
+        ip = (struct ip *)ptr;
+        if (ip->ip_p != IPPROTO_ICMP){ //  || 
+            printf("ip_p: %d\nIPPROT_ICMP: %d\n", ip->ip_p, IPPROTO_ICMP);
+            dprintf(2, "ft_ping: IP header from echo reply truncated\n");
+            printf("error2\n");
+            exit(2);
+        // clean exit
+        }
+        if ((size_t)(bytes_c) < ip->ip_hl * 4 + sizeof(struct icmp)) {
+           printf("ip_p: %d\nIPPROT_ICMP: %d\n", ip->ip_p, IPPROTO_ICMP);
+         dprintf(2, "ft_ping: IP header from echo reply truncated\n");
+            printf("error3\n");
+            exit(2);
+        }
+        printf("Ip_p: %d\n", ip->ip_p);
+        icmp = (struct icmp *)(ptr + (ip->ip_hl * 4));
+        //fill_rep_msg(&rep, bytes_c, msg);
+        //printf("icmp_type by rep: %d\n", rep.icmp->icmp_type);
+        printf("icmp_type: %d\n reponse attendu : %d\n", icmp->icmp_type, ICMP_ECHOREPLY); 
+        
+        if (icmp->icmp_type != ICMP_ECHOREPLY) {
+            printf("bad rep icmp type: %d\n", icmp->icmp_type);
+            if (bytes_c >= 64) {
+                icmp = (struct icmp *)(icmp->icmp_data) + sizeof(struct ip);
+            }
+
             free(msg.msg_iov);
             return ;
         }
         gettimeofday(&tv_in, NULL);
-            tv_out = (struct timeval *)(rep.icmp_rep + 1);
+            tv_out = (struct timeval *)(icmp + 1);
             if (tv_out && tv_out->tv_sec && tv_out->tv_usec)
             {
                 //printf("tv_in.tv_sec: %ld, tv_in.tv_usec: %ld\n", tv_in.tv_sec, tv_in.tv_usec);
@@ -202,13 +234,14 @@ void readpacket()
                 diff_tv = (tv_in.tv_sec - tv_out->tv_sec) * 1000.0 + (tv_in.tv_usec - tv_out->tv_usec) / 1000.0;
                 if (tv_out != NULL && tv_out->tv_sec != 0 && tv_out->tv_usec != 0)
                 {
-                    printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n", bytes_c, inet_ntoa(rep.ip_rep.ip_src), rep.icmp_rep->icmp_seq, rep.ip_rep.ip_ttl, diff_tv);
+                    printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl, diff_tv);
                     fill_stats(diff_tv);
                    // printf("%d bytes from %s: icmp_seq=%d ttl=%d time= ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl);
                 }
             }
         //  printf("%d bytes from : time=%.3f ms\n", bytes_c, diff_tv);
-        */
+        //*/
+        
     }
     else if (bytes_c < 0)
     {
@@ -221,7 +254,7 @@ void readpacket()
         //exit clean;
         printf("test2\n");
     }
-    else if (bytes_c >= (void *)(sizeof(struct icmp *)) + (sizeof(struct ip)))
+    else if (bytes_c >= (int)(sizeof(struct icmp *)) + (sizeof(struct ip)))
     {
 
         printf(" test 2 bytes_c: %d\n", bytes_c);
@@ -237,6 +270,10 @@ void readpacket()
 
 int set_sock()
 {
+    struct timeval timeout;
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+
     g_env.sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     if (g_env.sockfd < 0)
     {
@@ -245,6 +282,7 @@ int set_sock()
     }
     setsockopt(g_env.sockfd, SOL_SOCKET, SO_REUSEADDR, &(g_env.op_reuseaddr), sizeof(g_env.op_reuseaddr));
     setsockopt(g_env.sockfd, IPPROTO_IP, IP_TTL, &(g_env.op_ttl), sizeof(g_env.op_ttl));
+    setsockopt(g_env.sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
     gettimeofday(&(g_env.start_time), NULL);
     g_env.seq_num = 0;
     signal(SIGINT, sigint_handler);

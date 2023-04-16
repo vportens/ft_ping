@@ -42,8 +42,8 @@ typedef struct s_env {
 }               t_env;
 
 typedef struct s_reply {
-    struct ip ip_rep;
-    struct icmp *icmp_rep;
+    struct ip *ip_rep;
+    struct icmp *icmp;
     struct msghdr msg_rep;
     int bytes_c;
 

@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -Wextra -g
+CFLAGS=-Wall -Wextra -g 
 SRC=main.c parse.c set_sock.c sigfunction.c
 OBJ=$(SRC:.c=.o)
 EXE=ft_ping
