@@ -87,6 +87,7 @@ void sendpacket()
     if (sendto(g_env.sockfd, rawpacket, rawpacket_size, 0, (struct sockaddr *)&sock_in, sizeof(sock_in)) < 0)
     {
         perror("sendto error");
+        printf("error sendto\n");
         //close(g_env.sockfd);
         //exit(EXIT_FAILURE);
     }
@@ -124,6 +125,40 @@ void setbasemsghdr(struct msghdr *msg)
     msg->msg_flags = 0;
 }
 
+void fill_rep_msg(struct s_reply *rep, int bytes_c, struct msghdr msg) {
+    struct ip *ip;
+    char *ptr;
+    ssize_t ip_icmp_offset;
+
+    if ((size_t)(bytes_c) < sizeof(struct ip)) {
+        printf("error1\n");
+        dprintf(2, "ft_ping: IP header from echo reply truncated\n");
+        exit(2);
+        // clean exit
+    }
+    rep->bytes_c = bytes_c;
+    rep->msg_rep = msg;
+    ptr = (char *)msg.msg_iov->iov_base;
+    ip = (struct ip *)ptr;
+    printf("test ip_p: %d\n", ip->ip_p);
+    if (ip->ip_p != IPPROTO_ICMP){ //  || 
+        printf("ip_p: %d\nIPPROT_ICMP: %d\n", ip->ip_p, IPPROTO_ICMP);
+        dprintf(2, "ft_ping: IP header from echo reply truncated\n");
+        printf("error2\n");
+        exit(2);
+        // clean exit
+    }
+    ip_icmp_offset = ip->ip_hl << 2;
+    if ((size_t)(bytes_c) < ip_icmp_offset + sizeof(struct icmp)) {
+        printf("ip_p: %d\nIPPROT_ICMP: %d\n", ip->ip_p, IPPROTO_ICMP);
+        dprintf(2, "ft_ping: IP header from echo reply truncated\n");
+        printf("error3\n");
+        exit(2);
+    }
+    rep->icmp_rep = (struct icmp *)(ptr + ip_icmp_offset);
+
+}
+
 void readpacket()
 {
     printf("readpacket\n");
@@ -137,21 +172,28 @@ void readpacket()
     double diff_tv;
     int bytes_c;
 
+    struct s_reply rep;
+
     diff_tv = 0;
     setbasemsghdr(&msg);
-    if ((bytes_c = recvmsg(g_env.sockfd, &msg, 0)) == 64)
+    bytes_c = recvmsg(g_env.sockfd, &msg, 0);
+    if (bytes_c > 0)
     {
+        fill_rep_msg(&rep, bytes_c, msg);
+        rep.bytes_c = bytes_c;
         printf("bytes_c: %d\n", bytes_c);
-        ptr = (char *)msg.msg_iov->iov_base;
-        ip = (struct ip *)ptr;
-        icmp = (struct icmp *)(ptr + (ip->ip_hl * 4));
-        if (icmp->icmp_type != ICMP_ECHOREPLY) {
+        //ptr = (char *)msg.msg_iov->iov_base;
+        //ip = (struct ip *)ptr;
+        //printf("Ip_p: %d\n", ip->ip_p);
+        //icmp = (struct icmp *)(ptr + (ip->ip_hl * 4));
+        /*
+        if (rep.icmp_rep->icmp_type != ICMP_ECHOREPLY) {
             printf("test\n");
             free(msg.msg_iov);
             return ;
         }
         gettimeofday(&tv_in, NULL);
-            tv_out = (struct timeval *)(icmp + 1);
+            tv_out = (struct timeval *)(rep.icmp_rep + 1);
             if (tv_out && tv_out->tv_sec && tv_out->tv_usec)
             {
                 //printf("tv_in.tv_sec: %ld, tv_in.tv_usec: %ld\n", tv_in.tv_sec, tv_in.tv_usec);
@@ -160,12 +202,13 @@ void readpacket()
                 diff_tv = (tv_in.tv_sec - tv_out->tv_sec) * 1000.0 + (tv_in.tv_usec - tv_out->tv_usec) / 1000.0;
                 if (tv_out != NULL && tv_out->tv_sec != 0 && tv_out->tv_usec != 0)
                 {
-                    printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl, diff_tv);
+                    printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n", bytes_c, inet_ntoa(rep.ip_rep.ip_src), rep.icmp_rep->icmp_seq, rep.ip_rep.ip_ttl, diff_tv);
                     fill_stats(diff_tv);
                    // printf("%d bytes from %s: icmp_seq=%d ttl=%d time= ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl);
                 }
             }
         //  printf("%d bytes from : time=%.3f ms\n", bytes_c, diff_tv);
+        */
     }
     else if (bytes_c < 0)
     {
@@ -176,10 +219,18 @@ void readpacket()
     {
         dprintf(2, "ft_ping: socket closed\n");
         //exit clean;
+        printf("test2\n");
+    }
+    else if (bytes_c >= (void *)(sizeof(struct icmp *)) + (sizeof(struct ip)))
+    {
+
+        printf(" test 2 bytes_c: %d\n", bytes_c);
+        struct icmp *err_icmp;
+        //err_icmp = 
     }
     else
     {
-        printf("bytes_c: %d\n", bytes_c);
+        printf(" test 3 bytes_c: %d\n", bytes_c);
     }
     free(msg.msg_iov);
 }
@@ -196,16 +247,12 @@ int set_sock()
     setsockopt(g_env.sockfd, IPPROTO_IP, IP_TTL, &(g_env.op_ttl), sizeof(g_env.op_ttl));
     gettimeofday(&(g_env.start_time), NULL);
     g_env.seq_num = 0;
-    int i = 0;
     signal(SIGINT, sigint_handler);
     while (1)
     {
         sendpacket();
         readpacket();
         usleep(1000000);
-        i++;
-        if (i == 5)
-            break;
     }
     return (1);
 }
