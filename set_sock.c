@@ -1,4 +1,5 @@
 #include "ft_ping.h"
+#include <math.h>
 
 extern t_env g_env;
 
@@ -53,19 +54,85 @@ char *newpacket(size_t *size)
     return (rawpacket);
 }
 
+void add_diff_tv_to_list(double diff_tv) {
+    double *tmp;
+
+    if (g_env.size_lst_stat == 0) {
+        g_env.lst_stat = malloc(sizeof(double));
+        if (g_env.lst_stat == NULL) {
+            perror("malloc error");
+            // exit properly
+            exit(EXIT_FAILURE);
+        }
+        g_env.lst_stat[g_env.size_lst_stat] = diff_tv;
+        g_env.size_lst_stat++;
+    }
+    else {
+        tmp = malloc(sizeof(double) * (g_env.size_lst_stat + 1));
+        if (tmp == NULL) {
+            perror("malloc error");
+            // exit properly
+            exit(EXIT_FAILURE);
+        }
+        tmp = memcpy(tmp, g_env.lst_stat, sizeof(double) * g_env.size_lst_stat);
+        tmp[g_env.size_lst_stat] = diff_tv;
+        free(g_env.lst_stat);
+        g_env.lst_stat = tmp;
+        g_env.size_lst_stat++;
+    }
+    /*int i = 0;
+    while (i < g_env.size_lst_stat) {
+        printf("lst_stat[%d] = %f\n", i, g_env.lst_stat[i]);
+        i++;
+    }*/
+}
+
+double my_sqrt(double x) {
+    printf("before sqrt = %f\n", x);
+    double y = 1;
+    double e = 0.0000001;
+    while (x - y * y > e) {
+        y = (y + x / y) / 2;
+    }
+    printf("my sqrt = %f\n", y);
+    //ca ne marche pas
+   // printf("sqrt = %f\n", sqrt(x));
+    return (y);
+}
+
+double get_stddev() {
+    double mean = 0;
+    double sum_square_diff = 0;
+    double diff = 0;
+    
+    for (int i = 0; i < g_env.size_lst_stat; i++) {
+        mean += g_env.lst_stat[i];
+    }
+    mean /= g_env.size_lst_stat;
+
+    for (int i = 0; i < g_env.size_lst_stat; i++) {
+        diff = g_env.lst_stat[i] - mean;
+        sum_square_diff += diff * diff;
+    }
+
+    return (my_sqrt(sum_square_diff / g_env.size_lst_stat));
+}
+
 void fill_stats(double diff_tv)
 {
   //  g_env.op_ttl++;
     g_env.sum += diff_tv;
-    if (diff_tv < g_env.min)
+    if (diff_tv < g_env.min || g_env.size_lst_stat == 0)
         g_env.min = diff_tv;
-    if (diff_tv > g_env.max)
+    if (diff_tv > g_env.max || g_env.size_lst_stat == 0)
         g_env.max = diff_tv;
+    g_env.valide_ping++;
+    add_diff_tv_to_list(diff_tv);
 }
 
 void sendpacket()
 {
-    printf("sendpacket\n");
+   // printf("sendpacket\n");
     char *rawpacket;
     size_t rawpacket_size;
     struct sockaddr_in sock_in;
@@ -77,7 +144,7 @@ void sendpacket()
     memset(&(sock_in.sin_zero), 0, sizeof(sock_in.sin_zero));
 
     rawpacket = newpacket(&rawpacket_size);
-    printf("goto sendto\n");
+    //printf("goto sendto\n");
     if (sendto(g_env.sockfd, rawpacket, rawpacket_size, 0, (struct sockaddr *)&sock_in, sizeof(sock_in)) < 0)
     {
         perror("sendto error");
@@ -85,7 +152,7 @@ void sendpacket()
         //close(g_env.sockfd);
         //exit(EXIT_FAILURE);
     }
-    printf("sendto\n");
+    //printf("sendto\n");
     free(rawpacket);
 }
 
@@ -163,7 +230,7 @@ void setbasemsghdr(struct msghdr *msg)
 
 void readpacket()
 {
-    printf("readpacket\n");
+    //printf("readpacket\n");
 
     char *ptr;
     struct ip *ip = NULL;
@@ -177,11 +244,11 @@ void readpacket()
     struct s_reply rep;
 
     diff_tv = 0;
-    printf("readpacket1\n");
+    //printf("readpacket1\n");
     setbasemsghdr(&msg);
-    printf("readpacket2\n");
+    //printf("readpacket2\n");
     bytes_c = recvmsg(g_env.sockfd, &msg, 0);
-    printf("bytes_c: %d\n", bytes_c);
+    //printf("bytes_c: %d\n", bytes_c);
     if (bytes_c > 0)
     {
         if (bytes_c < (int)sizeof(struct ip)) {
@@ -209,11 +276,11 @@ void readpacket()
             printf("error3\n");
             exit(2);
         }
-        printf("Ip_p: %d\n", ip->ip_p);
+       // printf("Ip_p: %d\n", ip->ip_p);
         icmp = (struct icmp *)(ptr + (ip->ip_hl * 4));
         //fill_rep_msg(&rep, bytes_c, msg);
         //printf("icmp_type by rep: %d\n", rep.icmp->icmp_type);
-        printf("icmp_type: %d\n reponse attendu : %d\n", icmp->icmp_type, ICMP_ECHOREPLY); 
+        //printf("icmp_type: %d\n reponse attendu : %d\n", icmp->icmp_type, ICMP_ECHOREPLY); 
         
         if (icmp->icmp_type != ICMP_ECHOREPLY) {
             printf("bad rep icmp type: %d\n", icmp->icmp_type);
@@ -273,6 +340,10 @@ int set_sock()
     struct timeval timeout;
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
+
+    g_env.valide_ping = 0;
+    g_env.size_lst_stat = 0;
+    g_env.lst_stat = NULL;
 
     g_env.sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     if (g_env.sockfd < 0)

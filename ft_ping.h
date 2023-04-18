@@ -15,6 +15,8 @@
 # include <errno.h>
 # include <signal.h>
 
+# include <math.h>
+
 # define ICMP_DATA_SIZE 56
 
 
@@ -35,6 +37,8 @@ typedef struct s_env {
     double max;
     double sum;
     double *lst_stat;
+    int size_lst_stat;
+    int valide_ping;
 
     struct timeval start_time;
     struct timeval end_time;
@@ -52,6 +56,10 @@ typedef struct s_reply {
 int pars_arg(int ac, char **av);
 int set_sock(void);
 void sigint_handler(int sig);
+
+double get_stddev();
+
+const char	*get_error(uint8_t type, uint8_t code);
 
 #endif
 
