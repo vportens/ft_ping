@@ -34,6 +34,19 @@ void set_icmp(char *rawpacket, size_t payload_s)
     icmp->icmp_code = 0;
     icmp->icmp_cksum = 0;
     icmp->icmp_id = getpid();
+    if (g_env.seq_num == 0) {
+
+        printf("PING %s ", g_env.target);
+        printf("(%s): 56 data bytes", g_env.ipstr);
+        if (g_env.op_verbose == 1) {
+            char test[7];
+            sprintf(test, "0x%04x", icmp->icmp_id);
+            printf(", id %s = %d\n", test, icmp->icmp_id);
+        }
+        else {
+            printf("\n");
+        }
+    }
     icmp->icmp_seq = (g_env.seq_num++);
     icmp->icmp_cksum = checksum((unsigned short *)icmp, sizeof(struct icmp) + payload_s);
 }
@@ -80,24 +93,33 @@ void add_diff_tv_to_list(double diff_tv) {
         g_env.lst_stat = tmp;
         g_env.size_lst_stat++;
     }
-    /*int i = 0;
-    while (i < g_env.size_lst_stat) {
-        printf("lst_stat[%d] = %f\n", i, g_env.lst_stat[i]);
-        i++;
-    }*/
+
 }
 
 double my_sqrt(double x) {
-    printf("before sqrt = %f\n", x);
-    double y = 1;
-    double e = 0.0000001;
-    while (x - y * y > e) {
-        y = (y + x / y) / 2;
+    double cur = 0;
+    double prec = 0;
+    while (cur * cur < x) {
+        prec = cur;
+        cur += 1;
     }
-    printf("my sqrt = %f\n", y);
-    //ca ne marche pas
-   // printf("sqrt = %f\n", sqrt(x));
-    return (y);
+    cur = prec;
+    while (cur * cur < x) {
+        prec = cur;
+        cur += 0.1;
+    }
+    cur = prec;
+    while (cur * cur < x) {
+        prec = cur;
+        cur += 0.01;
+    }
+    cur = prec;
+     while (cur * cur < x) {
+        prec = cur;
+        cur += 0.001;
+    }   
+    cur = prec;
+    return (cur);
 }
 
 double get_stddev() {
@@ -120,10 +142,10 @@ double get_stddev() {
 
 void fill_stats(double diff_tv)
 {
-  //  g_env.op_ttl++;
     g_env.sum += diff_tv;
-    if (diff_tv < g_env.min || g_env.size_lst_stat == 0)
+    if (diff_tv < g_env.min || g_env.size_lst_stat == 0) {
         g_env.min = diff_tv;
+    }
     if (diff_tv > g_env.max || g_env.size_lst_stat == 0)
         g_env.max = diff_tv;
     g_env.valide_ping++;
@@ -132,7 +154,6 @@ void fill_stats(double diff_tv)
 
 void sendpacket()
 {
-   // printf("sendpacket\n");
     char *rawpacket;
     size_t rawpacket_size;
     struct sockaddr_in sock_in;
@@ -144,15 +165,11 @@ void sendpacket()
     memset(&(sock_in.sin_zero), 0, sizeof(sock_in.sin_zero));
 
     rawpacket = newpacket(&rawpacket_size);
-    //printf("goto sendto\n");
     if (sendto(g_env.sockfd, rawpacket, rawpacket_size, 0, (struct sockaddr *)&sock_in, sizeof(sock_in)) < 0)
     {
         perror("sendto error");
         printf("error sendto\n");
-        //close(g_env.sockfd);
-        //exit(EXIT_FAILURE);
     }
-    //printf("sendto\n");
     free(rawpacket);
 }
 
@@ -186,51 +203,10 @@ void setbasemsghdr(struct msghdr *msg)
     msg->msg_flags = 0;
 }
 
-/*void fill_rep_msg(struct s_reply *rep, int bytes_c, struct msghdr msg) {
-    struct ip *ip  ;
-    char *ptr;
-    ssize_t ip_icmp_offset;
 
-    if ((size_t)(bytes_c) < sizeof(struct ip)) {
-        printf("error1\n");
-        dprintf(2, "ft_ping: IP header from echo reply truncated\n");
-        exit(2);
-        // clean exit
-    }
-    rep->bytes_c = bytes_c;
-    rep->msg_rep = msg;
-    ptr = (char *)msg.msg_iov->iov_base;
-    ip = (struct ip *)(char *)ptr;
-    printf("test ip_p: %d\n", ip->ip_p);
-    if (ip->ip_p != IPPROTO_ICMP){ //  || 
-        printf("ip_p: %d\nIPPROT_ICMP: %d\n", ip->ip_p, IPPROTO_ICMP);
-        dprintf(2, "ft_ping: IP header from echo reply truncated\n");
-        printf("error2\n");
-        exit(2);
-        // clean exit
-    }
-    uint16_t ip_p_temp = ip->ip_p;
-    uint16_t ip_hl_temp = ip->ip_hl;
-
-    rep->icmp = (struct icmp *)(ptr + (ip_hl_temp << 2));
-    printf("Icmp rep type: %d\n", rep->icmp->icmp_type);
-    ip_icmp_offset = ip_hl_temp << 2;
-   
-    if ((size_t)(bytes_c) < ip_icmp_offset + sizeof(struct icmp)) {
-        printf("ip_p: %d\nIPPROT_ICMP: %d\n", ip->ip_p, IPPROTO_ICMP);
-        dprintf(2, "ft_ping: IP header from echo reply truncated\n");
-        printf("error3\n");
-        exit(2);
-    }
-
-    //rep->icmp = (struct icmp *)(ptr + ip_icmp_offset);
-    printf("Icmp rep type: %d\n", rep->icmp->icmp_type);
-
-}*/
 
 void readpacket()
 {
-    //printf("readpacket\n");
 
     char *ptr;
     struct ip *ip = NULL;
@@ -241,14 +217,10 @@ void readpacket()
     double diff_tv;
     int bytes_c;
 
-    struct s_reply rep;
 
     diff_tv = 0;
-    //printf("readpacket1\n");
     setbasemsghdr(&msg);
-    //printf("readpacket2\n");
     bytes_c = recvmsg(g_env.sockfd, &msg, 0);
-    //printf("bytes_c: %d\n", bytes_c);
     if (bytes_c > 0)
     {
         if (bytes_c < (int)sizeof(struct ip)) {
@@ -259,8 +231,6 @@ void readpacket()
         }
 
 
-        rep.bytes_c = bytes_c;
-        printf("bytes_c: %d\n", bytes_c);
         ptr = (char *)msg.msg_iov->iov_base;
         ip = (struct ip *)ptr;
         if (ip->ip_p != IPPROTO_ICMP){ //  || 
@@ -276,11 +246,7 @@ void readpacket()
             printf("error3\n");
             exit(2);
         }
-       // printf("Ip_p: %d\n", ip->ip_p);
         icmp = (struct icmp *)(ptr + (ip->ip_hl * 4));
-        //fill_rep_msg(&rep, bytes_c, msg);
-        //printf("icmp_type by rep: %d\n", rep.icmp->icmp_type);
-        //printf("icmp_type: %d\n reponse attendu : %d\n", icmp->icmp_type, ICMP_ECHOREPLY); 
         
         if (icmp->icmp_type != ICMP_ECHOREPLY) {
             printf("bad rep icmp type: %d\n", icmp->icmp_type);
@@ -295,19 +261,13 @@ void readpacket()
             tv_out = (struct timeval *)(icmp + 1);
             if (tv_out && tv_out->tv_sec && tv_out->tv_usec)
             {
-                //printf("tv_in.tv_sec: %ld, tv_in.tv_usec: %ld\n", tv_in.tv_sec, tv_in.tv_usec);
-               // printf("tv_out->tv_sec: %ld, tv_out->tv_usec: %ld\n", tv_out->tv_sec, tv_out->tv_usec);
-
                 diff_tv = (tv_in.tv_sec - tv_out->tv_sec) * 1000.0 + (tv_in.tv_usec - tv_out->tv_usec) / 1000.0;
                 if (tv_out != NULL && tv_out->tv_sec != 0 && tv_out->tv_usec != 0)
                 {
                     printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl, diff_tv);
                     fill_stats(diff_tv);
-                   // printf("%d bytes from %s: icmp_seq=%d ttl=%d time= ms\n", bytes_c, inet_ntoa(ip->ip_src), icmp->icmp_seq, ip->ip_ttl);
                 }
             }
-        //  printf("%d bytes from : time=%.3f ms\n", bytes_c, diff_tv);
-        //*/
         
     }
     else if (bytes_c < 0)
@@ -323,10 +283,7 @@ void readpacket()
     }
     else if (bytes_c >= (int)(sizeof(struct icmp *)) + (sizeof(struct ip)))
     {
-
         printf(" test 2 bytes_c: %d\n", bytes_c);
-        struct icmp *err_icmp;
-        //err_icmp = 
     }
     else
     {
@@ -344,6 +301,10 @@ int set_sock()
     g_env.valide_ping = 0;
     g_env.size_lst_stat = 0;
     g_env.lst_stat = NULL;
+    g_env.seq_num = 0;
+    g_env.min = 0;
+    g_env.max = 0;
+    g_env.sum = 0;
 
     g_env.sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     if (g_env.sockfd < 0)

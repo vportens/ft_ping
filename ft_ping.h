@@ -26,6 +26,7 @@ typedef struct s_env {
     char ipstr[INET6_ADDRSTRLEN];
     struct sockaddr_in *res;
     int timeout;
+    char *target;
 
     int seq_num;
 

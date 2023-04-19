@@ -20,8 +20,8 @@ int pars_hostname(char *target) {
         fprintf(stderr,"ft_ping: unknown host\n" );
         exit (EXIT_FAILURE);
     }
-
-    printf("address ip : %s\n", target);
+    
+    g_env.target = target;
 
     struct in_addr addr;
     char *ipver;
@@ -43,8 +43,7 @@ int pars_hostname(char *target) {
         freeaddrinfo(res);
         return (EXIT_FAILURE);
     }
-    printf("  %s: %s\n", ipver, g_env.ipstr);
-    freeaddrinfo(res);
+   freeaddrinfo(res);
     return (0);
 }
 
@@ -74,7 +73,6 @@ int pars_arg(int ac, char **av) {
                 }
                 else if (arg[j] == 'v') {
                     g_env.op_verbose = 1;
-                    // active verbose mode
                 }
                 else {
                     printf("Error option not found\n./ft_ping [-v] [-h] target\n");
@@ -84,10 +82,9 @@ int pars_arg(int ac, char **av) {
             }
         }
         else {
-            // catch ip/hostname
             pars_hostname(arg);
         }
         i++;
     }
-    return (printf("end pars_arg\n"));
+    return (0);
 }
